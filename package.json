@@ -11,8 +11,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "date-fns": "latest",
+    "dexie": "latest",
+    "lucide-react": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "zustand": "latest"
   },
   "devDependencies": {
     "@types/react": "latest",
@@ -20,6 +24,7 @@
     "@vitejs/plugin-react": "latest",
     "typescript": "latest",
     "vite": "latest",
+    "vite-plugin-pwa": "latest",
     "vitest": "latest"
   }
 }

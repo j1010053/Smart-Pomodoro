@@ -28,6 +28,17 @@ export interface Task {
   updatedAt: string;
 }
 
+export type WorkEventType = "created" | "started" | "completed" | "skipped" | "timerTransition";
+
+export interface WorkEvent {
+  id: string;
+  taskId?: string;
+  type: WorkEventType;
+  occurredAt: string;
+  source: "explicit" | "timer" | "inferred" | "corrected";
+  confidence: number;
+}
+
 export interface WorkSettings {
   dailyWorkMinutes: number;
   averageEnergy: EnergyLevel;
