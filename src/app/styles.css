@@ -1,0 +1,57 @@
+:root {
+  font-family: Inter, "Noto Sans TC", system-ui, sans-serif;
+  color: #24251f;
+  background: #f6f2ea;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, a { font: inherit; }
+button { cursor: pointer; }
+
+.app-shell {
+  width: min(100%, 720px);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 24px 18px 104px;
+}
+
+.topbar, .capture-card, .action-row, .capacity-card, .bottom-nav {
+  display: flex;
+  align-items: center;
+}
+
+.topbar { justify-content: space-between; margin-bottom: 28px; }
+h1, h2, p { margin-top: 0; }
+h1 { max-width: 12ch; margin-bottom: 0; font-size: clamp(2rem, 9vw, 3.8rem); line-height: 1.08; letter-spacing: -0.04em; }
+h2 { margin-bottom: 10px; font-size: 1.35rem; line-height: 1.25; }
+.eyebrow { margin-bottom: 7px; color: #7a6547; font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.muted { color: #686960; line-height: 1.6; }
+
+.icon-button { width: 44px; height: 44px; border: 1px solid #d8d1c5; border-radius: 50%; background: transparent; color: #4b4c44; }
+.capture-card, .focus-card, .capacity-card { border-radius: 24px; }
+.capture-card { justify-content: space-between; gap: 18px; padding: 20px; background: #dce9cf; }
+.capture-card h2 { margin-bottom: 0; }
+.focus-card { margin-top: 16px; padding: 24px 20px; background: #fff; box-shadow: 0 16px 48px rgba(63, 51, 34, .08); }
+.action-row { flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.primary-button, .secondary-button { min-height: 46px; padding: 0 18px; border-radius: 999px; font-weight: 750; }
+.primary-button { border: 0; background: #263c2a; color: #fff; }
+.secondary-button { border: 1px solid #d8d1c5; background: transparent; color: #34372f; }
+.capacity-card { justify-content: space-between; gap: 24px; margin-top: 16px; padding: 20px; border: 1px solid #ded6c8; }
+.capacity-card strong { font-size: 1.45rem; }
+.capacity-card p:last-child { max-width: 18ch; margin: 0; color: #686960; font-size: .85rem; line-height: 1.45; text-align: right; }
+
+.bottom-nav { position: fixed; right: 16px; bottom: 16px; left: 16px; z-index: 2; justify-content: space-around; width: min(calc(100% - 32px), 688px); margin: auto; padding: 10px; border: 1px solid rgba(216, 209, 197, .8); border-radius: 20px; background: rgba(255, 255, 255, .92); backdrop-filter: blur(16px); box-shadow: 0 12px 32px rgba(63, 51, 34, .12); }
+.bottom-nav a { padding: 10px 14px; border-radius: 14px; color: #696a62; text-decoration: none; }
+.bottom-nav a.active { background: #263c2a; color: #fff; }
+
+@media (min-width: 640px) {
+  .app-shell { padding-top: 48px; }
+  .capture-card, .focus-card, .capacity-card { padding: 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+}
