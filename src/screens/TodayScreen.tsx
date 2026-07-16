@@ -32,7 +32,7 @@ function TaskRow({ task, onStart }: { task: Task; onStart: (task: Task) => void 
 }
 
 export function TodayScreen() {
-  const { hydrated, tasks, settings, activeSession, hydrate, addTask, loadTrialTasks, saveSettings, startTimer, stopTimer, exportBackup } = useAppStore();
+  const { hydrated, tasks, settings, activeSession, hydrate, addTask, loadTrialTasks, saveSettings, startTimer, stopTimer, exportBackup, importBackup } = useAppStore();
   const [title, setTitle] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
@@ -68,7 +68,7 @@ export function TodayScreen() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div><p className="eyebrow">試用版 · 今天</p><h1>先開始，再慢慢整理。</h1></div>
+        <div><p className="eyebrow">長期試用版 v1 · 今天</p><h1>先開始，再慢慢整理。</h1></div>
         <button className="icon-button" aria-label="開啟設定" onClick={() => setShowSettings(true)}><Settings2 size={19} /></button>
       </header>
 
@@ -98,7 +98,7 @@ export function TodayScreen() {
 
       <section className="task-section"><div className="section-heading"><div><p className="eyebrow">收件匣與待辦</p><h2>你可以隨時改變主意</h2></div><span>{tasks.filter((task) => task.active).length} 件</span></div><ul>{tasks.filter((task) => task.active).map((task) => <TaskRow key={task.id} task={task} onStart={(item) => begin(item)} />)}</ul></section>
 
-      {showSettings ? <div className="dialog-backdrop" role="presentation"><section className="settings-dialog" role="dialog" aria-modal="true" aria-label="工作設定"><div className="section-heading"><h2>今天的節奏</h2><button className="icon-button" aria-label="關閉設定" onClick={() => setShowSettings(false)}>×</button></div><label>預計投入 <input type="number" min="0" step="15" value={settings.dailyWorkMinutes} onChange={(event) => void saveSettings({ ...settings, dailyWorkMinutes: Number(event.target.value) })} /> 分鐘</label><label>保留緩衝 <input type="range" min="0" max="0.5" step="0.05" value={settings.bufferRatio} onChange={(event) => void saveSettings({ ...settings, bufferRatio: Number(event.target.value) })} /><span>{Math.round(settings.bufferRatio * 100)}%</span></label><button className="secondary-button" onClick={downloadBackup}><Download size={16} /> 匯出本機備份</button></section></div> : null}
+      {showSettings ? <div className="dialog-backdrop" role="presentation"><section className="settings-dialog" role="dialog" aria-modal="true" aria-label="工作設定"><div className="section-heading"><h2>今天的節奏</h2><button className="icon-button" aria-label="關閉設定" onClick={() => setShowSettings(false)}>×</button></div><label>預計投入 <input type="number" min="0" step="15" value={settings.dailyWorkMinutes} onChange={(event) => void saveSettings({ ...settings, dailyWorkMinutes: Number(event.target.value) })} /> 分鐘</label><label>保留緩衝 <input type="range" min="0" max="0.5" step="0.05" value={settings.bufferRatio} onChange={(event) => void saveSettings({ ...settings, bufferRatio: Number(event.target.value) })} /><span>{Math.round(settings.bufferRatio * 100)}%</span></label><div className="backup-actions"><button className="secondary-button" onClick={downloadBackup}><Download size={16} /> 匯出備份</button><label className="secondary-button import-button">匯入備份<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void file.text().then(importBackup); }} /></label></div></section></div> : null}
 
       <nav className="bottom-nav" aria-label="主要導覽"><a className="active" href="#today">今天</a><a href="#inbox">收件匣</a><a href="#review">回顧</a></nav>
     </main>

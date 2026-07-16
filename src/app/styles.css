@@ -9,3 +9,7 @@
 .trial-card { display:flex; gap:14px; margin-bottom:16px; padding:20px; border-radius:24px; background:#f9e6b9; color:#4d3b16; }
 .trial-card h2 { margin-bottom:4px; }
 .trial-card p:not(.eyebrow) { margin:0 0 14px; color:#705b2d; line-height:1.5; }
+.backup-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
+.settings-dialog .backup-actions .secondary-button { margin-top:0; }
+.import-button { cursor:pointer; }
+.import-button input { position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; }

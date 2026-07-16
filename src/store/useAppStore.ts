@@ -20,6 +20,7 @@ interface AppState {
   startTimer: (taskId: string | undefined, mode: TimerMode, seconds: number) => Promise<void>;
   stopTimer: (completed?: boolean) => Promise<void>;
   exportBackup: () => Promise<string>;
+  importBackup: (content: string) => Promise<void>;
 }
 
 async function recordEvent(type: WorkEvent["type"], taskId?: string, source: WorkEvent["source"] = "explicit") {
@@ -95,5 +96,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   async exportBackup() {
     const [tasks, sessions, events, settings] = await Promise.all([db.tasks.toArray(), db.sessions.toArray(), db.events.toArray(), db.settings.get("main")]);
     return JSON.stringify({ version: 1, exportedAt: now(), tasks, sessions, events, settings }, null, 2);
+  },
+  async importBackup(content) {
+    const backup = JSON.parse(content) as { version?: number; tasks?: Task[]; sessions?: TimerSession[]; events?: WorkEvent[]; settings?: WorkSettings & { id?: "main" } };
+    if (backup.version !== 1 || !Array.isArray(backup.tasks)) throw new Error("不支援的備份格式");
+    await db.transaction("rw", [db.tasks, db.sessions, db.events, db.settings], async () => {
+      await Promise.all([db.tasks.clear(), db.sessions.clear(), db.events.clear(), db.settings.clear()]);
+      await db.tasks.bulkPut(backup.tasks ?? []);
+      await db.sessions.bulkPut(backup.sessions ?? []);
+      await db.events.bulkPut(backup.events ?? []);
+      if (backup.settings) await db.settings.put({ ...backup.settings, id: "main" });
+    });
+    await get().hydrate();
   },
 }));
