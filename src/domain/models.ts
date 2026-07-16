@@ -24,11 +24,16 @@ export interface Task {
   doneMinutes: number;
   repeatDays?: number[];
   active: boolean;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type WorkEventType = "created" | "started" | "completed" | "skipped" | "timerTransition";
+export type WorkEventType =
+  | "created" | "started" | "completed" | "skipped" | "timerTransition"
+  | "task_created" | "task_started" | "task_completed" | "task_skipped" | "task_reopened" | "task_updated"
+  | "timer_started" | "timer_paused" | "timer_resumed" | "timer_completed" | "timer_ended_early" | "timer_skipped"
+  | "settings_updated" | "legacy_timer_transition";
 
 export interface WorkEvent {
   id: string;
@@ -37,6 +42,32 @@ export interface WorkEvent {
   occurredAt: string;
   source: "explicit" | "timer" | "inferred" | "corrected";
   confidence: number;
+  sessionId?: string;
+  localDate?: string;
+  quadrant?: "importantUrgent" | "important" | "urgent" | "later";
+  importance?: Importance;
+  urgencyScore?: number;
+  actualSeconds?: number;
+  mode?: TimerMode;
+  plannedSeconds?: number;
+}
+
+export interface QuadrantStats { completedCount: number; skippedCount: number; resolvedCount: number; completedSeconds: number; completionRate: number | null; skipRate: number | null; }
+export interface DailyStats {
+  date: string;
+  observed: boolean;
+  startedCount: number;
+  completedCount: number;
+  skippedCount: number;
+  resolvedCount: number;
+  completionRate: number | null;
+  skipRate: number | null;
+  pomodoroCount: number;
+  completedSeconds: number;
+  quadrants: Record<"importantUrgent" | "important" | "urgent" | "later", QuadrantStats>;
+  q2Completed: boolean;
+  updatedAt: string;
+  calculationVersion: number;
 }
 
 export interface WorkSettings {
@@ -46,6 +77,8 @@ export interface WorkSettings {
 }
 
 export type TimerMode = "focus" | "shortBreak" | "longBreak" | "microStart";
+export type TimerStatus = "running" | "paused" | "completed" | "endedEarly" | "skipped";
+export type TimerOutcome = "completed" | "endedEarly" | "skipped";
 
 export interface TimerSession {
   id: string;
@@ -57,5 +90,7 @@ export interface TimerSession {
   plannedEndAt?: string;
   endedAt?: string;
   pausedRemainingSeconds?: number;
+  actualSeconds?: number;
+  status: TimerStatus;
   completed: boolean;
 }

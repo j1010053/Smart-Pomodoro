@@ -30,7 +30,7 @@ export interface Recommendation {
 }
 
 export function recommendTasks(tasks: Task[], now = new Date()): Recommendation[] {
-  return tasks
+  const ranked = tasks
     .filter((task) => task.active)
     .map((task) => {
       const urgency = urgencyFromDeadline(task.deadline, now);
@@ -47,4 +47,13 @@ export function recommendTasks(tasks: Task[], now = new Date()): Recommendation[
       return { task, score, reasons: reasons.slice(0, 2) };
     })
     .sort((a, b) => b.score - a.score);
+  if (!ranked.slice(0, 3).some((item) => quadrantFor(item.task, now) === "important")) {
+    const protectedIndex = ranked.findIndex((item, index) => index >= 3 && quadrantFor(item.task, now) === "important");
+    if (protectedIndex >= 0) {
+      const [protectedTask] = ranked.splice(protectedIndex, 1);
+      protectedTask.reasons = ["替長期重要工作保留一輪", ...protectedTask.reasons].slice(0, 2);
+      ranked.splice(Math.min(2, ranked.length), 0, protectedTask);
+    }
+  }
+  return ranked;
 }

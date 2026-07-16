@@ -1,14 +1,23 @@
 import { create } from "zustand";
 import { db } from "../db/database";
-import type { Task, TimerMode, TimerSession, WorkEvent, WorkSettings } from "../domain/models";
+import type { Task, TaskTypeProfile, TimerMode, TimerOutcome, TimerSession, WorkEvent, WorkSettings } from "../domain/models";
+import { format } from "date-fns";
+import { quadrantFor, urgencyFromDeadline } from "../domain/priority";
+import { timerActualSeconds, timerRemainingSeconds } from "../domain/timer";
 
 const defaultSettings: WorkSettings = { dailyWorkMinutes: 180, averageEnergy: 2, bufferRatio: 0.2 };
 const id = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
+const defaultProfiles: TaskTypeProfile[] = [
+  { id: "deep-work", name: "深度工作", defaultImportance: 4, defaultEnergy: 3, defaultEstimateMinutes: 50, preferredTimeWindow: "morning", active: true },
+  { id: "admin", name: "行政雜務", defaultImportance: 2, defaultEnergy: 1, defaultEstimateMinutes: 15, preferredTimeWindow: "afternoon", active: true },
+  { id: "learning", name: "學習成長", defaultImportance: 3, defaultEnergy: 2, defaultEstimateMinutes: 30, preferredTimeWindow: "any", active: true },
+];
 
 interface AppState {
   hydrated: boolean;
   tasks: Task[];
+  taskProfiles: TaskTypeProfile[];
   settings: WorkSettings;
   activeSession?: TimerSession;
   hydrate: () => Promise<void>;
@@ -16,28 +25,41 @@ interface AppState {
   loadTrialTasks: () => Promise<void>;
   updateTask: (id: string, patch: Partial<Task>) => Promise<void>;
   completeTask: (id: string) => Promise<void>;
+  restoreTask: (id: string) => Promise<void>;
+  skipTask: (id: string) => Promise<void>;
   saveSettings: (settings: WorkSettings) => Promise<void>;
-  startTimer: (taskId: string | undefined, mode: TimerMode, seconds: number) => Promise<void>;
-  stopTimer: (completed?: boolean) => Promise<void>;
+  startTimer: (taskId: string | undefined, mode: TimerMode, seconds: number, parentSessionId?: string) => Promise<boolean>;
+  pauseTimer: () => Promise<void>;
+  resumeTimer: () => Promise<void>;
+  finishTimer: (outcome: TimerOutcome) => Promise<TimerSession | undefined>;
   exportBackup: () => Promise<string>;
   importBackup: (content: string) => Promise<void>;
 }
 
-async function recordEvent(type: WorkEvent["type"], taskId?: string, source: WorkEvent["source"] = "explicit") {
-  await db.events.put({ id: id(), taskId, type, occurredAt: now(), source, confidence: 1 });
+async function recordEvent(type: WorkEvent["type"], taskId?: string, source: WorkEvent["source"] = "explicit", details: Partial<WorkEvent> = {}) {
+  const task = taskId ? await db.tasks.get(taskId) : undefined;
+  const occurredAt = now();
+  await db.events.put({ id: id(), taskId, type, occurredAt, localDate: format(new Date(occurredAt), "yyyy-MM-dd"), source, confidence: 1, quadrant: task ? quadrantFor(task) : undefined, importance: task?.importance, urgencyScore: task ? urgencyFromDeadline(task.deadline) : undefined, ...details });
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   hydrated: false,
   tasks: [],
+  taskProfiles: [],
   settings: defaultSettings,
   async hydrate() {
+    let taskProfiles = await db.taskProfiles.toArray();
+    if (taskProfiles.length === 0) {
+      await db.taskProfiles.bulkPut(defaultProfiles);
+      taskProfiles = defaultProfiles;
+    }
     const [tasks, storedSettings, activeSession] = await Promise.all([
       db.tasks.orderBy("updatedAt").reverse().toArray(),
       db.settings.get("main"),
       db.sessions.filter((session) => !session.endedAt).first(),
     ]);
-    set({ tasks, settings: storedSettings ?? defaultSettings, activeSession, hydrated: true });
+    const normalizedSession = activeSession ? { ...activeSession, status: activeSession.status ?? (activeSession.pausedRemainingSeconds !== undefined ? "paused" as const : "running" as const) } : undefined;
+    set({ tasks, taskProfiles, settings: storedSettings ?? defaultSettings, activeSession: normalizedSession, hydrated: true });
   },
   async addTask(title) {
     const trimmed = title.trim();
@@ -45,7 +67,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const timestamp = now();
     const task: Task = { id: id(), title: trimmed, doneMinutes: 0, active: true, createdAt: timestamp, updatedAt: timestamp };
     await db.tasks.put(task);
-    await recordEvent("created", task.id);
+    await recordEvent("task_created", task.id);
     set((state) => ({ tasks: [task, ...state.tasks] }));
   },
   async loadTrialTasks() {
@@ -58,40 +80,82 @@ export const useAppStore = create<AppState>((set, get) => ({
       { id: id(), title: "閱讀一篇想看的文章", importance: 2, estimateMinutes: 20, doneMinutes: 0, active: true, createdAt: timestamp, updatedAt: timestamp },
     ];
     await db.tasks.bulkPut(examples);
-    await Promise.all(examples.map((task) => recordEvent("created", task.id)));
+    await Promise.all(examples.map((task) => recordEvent("task_created", task.id)));
     set({ tasks: examples });
   },
   async updateTask(taskId, patch) {
     const updatedAt = now();
     await db.tasks.update(taskId, { ...patch, updatedAt });
     set((state) => ({ tasks: state.tasks.map((task) => task.id === taskId ? { ...task, ...patch, updatedAt } : task) }));
+    await recordEvent("task_updated", taskId);
   },
   async completeTask(taskId) {
-    await get().updateTask(taskId, { active: false });
-    await recordEvent("completed", taskId);
+    const task = get().tasks.find((item) => item.id === taskId);
+    if (!task?.active) return;
+    if (get().activeSession?.taskId === taskId) await get().finishTimer("endedEarly");
+    await get().updateTask(taskId, { active: false, completedAt: now() });
+    await recordEvent("task_completed", taskId);
+  },
+  async restoreTask(taskId) {
+    const task = get().tasks.find((item) => item.id === taskId);
+    if (!task || task.active) return;
+    await get().updateTask(taskId, { active: true, completedAt: undefined });
+    await recordEvent("task_reopened", taskId, "corrected");
+  },
+  async skipTask(taskId) {
+    if (!get().tasks.some((task) => task.id === taskId && task.active)) return;
+    await recordEvent("task_skipped", taskId);
   },
   async saveSettings(settings) {
     await db.settings.put({ id: "main", ...settings });
     set({ settings });
+    await recordEvent("settings_updated");
   },
-  async startTimer(taskId, mode, seconds) {
-    const session: TimerSession = { id: id(), taskId, mode, plannedSeconds: seconds, startedAt: now(), plannedEndAt: new Date(Date.now() + seconds * 1000).toISOString(), completed: false };
+  async startTimer(taskId, mode, seconds, parentSessionId) {
+    if (get().activeSession) return false;
+    const session: TimerSession = { id: id(), taskId, parentSessionId, mode, plannedSeconds: seconds, startedAt: now(), plannedEndAt: new Date(Date.now() + seconds * 1000).toISOString(), completed: false, status: "running" };
     await db.sessions.put(session);
-    await recordEvent("started", taskId, "timer");
+    await recordEvent("timer_started", taskId, "timer", { sessionId: session.id, mode, plannedSeconds: seconds });
+    if (mode === "focus" || mode === "microStart") await recordEvent("task_started", taskId, "timer", { sessionId: session.id, mode, plannedSeconds: seconds });
     set({ activeSession: session });
+    return true;
   },
-  async stopTimer(completed = false) {
+  async pauseTimer() {
     const session = get().activeSession;
-    if (!session) return;
+    if (!session || session.status === "paused" || !session.plannedEndAt) return;
+    const remaining = timerRemainingSeconds(session);
+    const updated = { ...session, status: "paused" as const, plannedEndAt: undefined, pausedRemainingSeconds: remaining };
+    await db.sessions.update(session.id, { status: "paused", plannedEndAt: undefined, pausedRemainingSeconds: remaining });
+    await recordEvent("timer_paused", session.taskId, "timer", { sessionId: session.id, mode: session.mode, plannedSeconds: session.plannedSeconds });
+    set({ activeSession: updated });
+  },
+  async resumeTimer() {
+    const session = get().activeSession;
+    if (!session || session.status !== "paused") return;
+    const remaining = Math.max(0, session.pausedRemainingSeconds ?? 0);
+    const plannedEndAt = new Date(Date.now() + remaining * 1000).toISOString();
+    const updated = { ...session, status: "running" as const, plannedEndAt, pausedRemainingSeconds: undefined };
+    await db.sessions.update(session.id, { status: "running", plannedEndAt, pausedRemainingSeconds: undefined });
+    await recordEvent("timer_resumed", session.taskId, "timer", { sessionId: session.id, mode: session.mode, plannedSeconds: session.plannedSeconds });
+    set({ activeSession: updated });
+  },
+  async finishTimer(outcome) {
+    const session = get().activeSession;
+    if (!session || !["running", "paused"].includes(session.status)) return undefined;
     const endedAt = now();
-    await db.sessions.update(session.id, { endedAt, completed });
-    if (session.taskId && session.startedAt) {
-      const minutes = Math.max(1, Math.round((Date.now() - new Date(session.startedAt).getTime()) / 60000));
+    const actualSeconds = timerActualSeconds(session, outcome);
+    const completed = outcome === "completed";
+    const finished: TimerSession = { ...session, status: outcome, actualSeconds, endedAt, completed, plannedEndAt: undefined, pausedRemainingSeconds: undefined };
+    await db.sessions.update(session.id, { status: outcome, actualSeconds, endedAt, completed, plannedEndAt: undefined, pausedRemainingSeconds: undefined });
+    if (session.taskId && actualSeconds > 0 && (session.mode === "focus" || session.mode === "microStart")) {
+      const minutes = Math.round(actualSeconds / 60);
       const task = get().tasks.find((item) => item.id === session.taskId);
-      if (task) await get().updateTask(task.id, { doneMinutes: task.doneMinutes + minutes });
+      if (task && minutes > 0) await get().updateTask(task.id, { doneMinutes: task.doneMinutes + minutes });
     }
-    await recordEvent("timerTransition", session.taskId, "timer");
+    const eventType = outcome === "completed" ? "timer_completed" : outcome === "skipped" ? "timer_skipped" : "timer_ended_early";
+    await recordEvent(eventType, session.taskId, "timer", { sessionId: session.id, mode: session.mode, plannedSeconds: session.plannedSeconds, actualSeconds });
     set({ activeSession: undefined });
+    return finished;
   },
   async exportBackup() {
     const [tasks, sessions, events, settings] = await Promise.all([db.tasks.toArray(), db.sessions.toArray(), db.events.toArray(), db.settings.get("main")]);
