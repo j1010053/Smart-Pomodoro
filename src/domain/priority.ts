@@ -31,7 +31,7 @@ export interface Recommendation {
 
 export function recommendTasks(tasks: Task[], now = new Date()): Recommendation[] {
   const ranked = tasks
-    .filter((task) => task.active)
+    .filter((task) => task.active && !task.isSplitParent)
     .map((task) => {
       const urgency = urgencyFromDeadline(task.deadline, now);
       const importance = task.importance ?? 1;

@@ -33,7 +33,7 @@ export function buildSevenDayForecast(tasks: Task[], dailyCapacity: number, now 
   const hard: Array<{ task: Task; minutes: number; dueIndex: number }> = [];
   let overdueMinutes = 0;
   let flexibleBacklogMinutes = 0;
-  for (const task of tasks.filter((item) => item.active)) {
+  for (const task of tasks.filter((item) => item.active && !item.isSplitParent)) {
     const minutes = remainingMinutes(task).minutes;
     if (minutes <= 0) continue;
     const parsed = task.deadline ? parseISO(task.deadline) : undefined;
@@ -53,7 +53,7 @@ export function buildSevenDayForecast(tasks: Task[], dailyCapacity: number, now 
     }
     if (unplaced > 0) days[item.dueIndex].overflowMinutes += unplaced;
   }
-  const q2 = tasks.filter((task) => task.active && quadrantFor(task, now) === "important" && remainingMinutes(task).minutes > 0).sort((a, b) => (b.importance ?? 1) - (a.importance ?? 1))[0];
+  const q2 = tasks.filter((task) => task.active && !task.isSplitParent && quadrantFor(task, now) === "important" && remainingMinutes(task).minutes > 0).sort((a, b) => (b.importance ?? 1) - (a.importance ?? 1))[0];
   if (q2 && days[0].quadrantMinutes.important === 0 && days[0].remainingCapacityMinutes > 0) {
     const protectedMinutes = Math.min(25, days[0].remainingCapacityMinutes, remainingMinutes(q2).minutes);
     days[0].protectedQ2Minutes = protectedMinutes; days[0].scheduledMinutes += protectedMinutes; days[0].remainingCapacityMinutes -= protectedMinutes; days[0].quadrantMinutes.important += protectedMinutes;

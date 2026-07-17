@@ -8,23 +8,25 @@ import { buildSevenDayForecast, matrixHint } from "../domain/forecast";
 import { useAppStore } from "../store/useAppStore";
 import { BottomNav } from "../app/BottomNav";
 import type { AppPage } from "../app/navigation";
+import { importanceLabel, TaskEditorDialog } from "../components/TaskEditorDialog";
 
 const minute = 60;
 
-function TaskRow({ task, onStart }: { task: Task; onStart: (task: Task) => void }) {
+function TaskRow({ task, onStart, onEdit }: { task: Task; onStart: (task: Task) => void; onEdit: (task: Task) => void }) {
   const updateTask = useAppStore((state) => state.updateTask);
   const completeTask = useAppStore((state) => state.completeTask);
   const urgency = urgencyFromDeadline(task.deadline);
   return (
     <li className="task-row">
       <button className="check-button" aria-label={`完成 ${task.title}`} onClick={() => void completeTask(task.id)} />
-      <div className="task-copy">
+      <button className="task-copy" onClick={() => onEdit(task)} aria-label={`編輯 ${task.title}`}>
         <strong>{task.title}</strong>
         <span>{task.deadline ? `${task.deadline}${urgency >= 35 ? " · 時間接近" : ""}` : "尚未分類"} · {task.estimateMinutes ?? 25} 分鐘</span>
-      </div>
-      <select aria-label={`${task.title} 的重要性`} value={task.importance ?? ""} onChange={(event) => void updateTask(task.id, { importance: event.target.value ? Number(event.target.value) as Importance : undefined })}>
-        <option value="">重要性</option><option value="1">低</option><option value="2">一般</option><option value="3">高</option><option value="4">很高</option>
-      </select>
+        <small>重要性設定：{importanceLabel(task.importance)}</small>
+      </button>
+      <label className="importance-control"><span>重要性設定</span><select aria-label={`${task.title} 的重要性設定`} value={task.importance ?? ""} onChange={(event) => void updateTask(task.id, { importance: event.target.value ? Number(event.target.value) as Importance : undefined })}>
+        <option value="">未設定</option><option value="1">低</option><option value="2">一般</option><option value="3">高</option><option value="4">很高</option>
+      </select></label>
       <button className="compact-button" onClick={() => onStart(task)}>開始</button>
     </li>
   );
@@ -41,6 +43,7 @@ export function TodayScreen({ onNavigate }: { onNavigate: (page: AppPage) => voi
   const [showSettings, setShowSettings] = useState(false);
   const [recommendationIndex, setRecommendationIndex] = useState(0);
   const [skipNotice, setSkipNotice] = useState<string>();
+  const [editing, setEditing] = useState<Task>();
   const capacity = effectiveDailyCapacity(settings);
   const recommendations = useMemo(() => recommendTasks(tasks), [tasks]);
   const load = useMemo(() => workloadByQuadrant(tasks), [tasks]);
@@ -92,11 +95,13 @@ export function TodayScreen({ onNavigate }: { onNavigate: (page: AppPage) => voi
 
       <section className="matrix-card"><div className="section-heading"><div><p className="eyebrow">今日安排</p><h2>四象限配比</h2></div><span>{todayPlan.scheduledMinutes} 分</span></div><div className="matrix"><div className="quadrant urgent-important"><b>重要且緊急</b><span>{todayPlan.quadrantMinutes.importantUrgent} 分</span></div><div className="quadrant important"><b>重要、不緊急</b><span>{todayPlan.quadrantMinutes.important} 分</span></div><div className="quadrant urgent"><b>緊急、不重要</b><span>{todayPlan.quadrantMinutes.urgent} 分</span></div><div className="quadrant later"><b>之後再說</b><span>{todayPlan.quadrantMinutes.later} 分</span></div></div>{planHint ? <p className="matrix-hint">{planHint}</p> : null}<p className="backlog-note">全部未完成待辦共 {load.total} 分鐘。</p></section>
 
-      <section className="task-section"><div className="section-heading"><div><p className="eyebrow">收件匣與待辦</p><h2>你可以隨時改變主意</h2></div><span>{tasks.filter((task) => task.active).length} 件</span></div><ul>{tasks.filter((task) => task.active).map((task) => <TaskRow key={task.id} task={task} onStart={(item) => begin(item)} />)}</ul></section>
+      <section className="task-section"><div className="section-heading"><div><p className="eyebrow">收件匣與待辦</p><h2>點任務即可編輯</h2></div><span>{tasks.filter((task) => task.active && !task.isSplitParent).length} 件</span></div><ul>{tasks.filter((task) => task.active && !task.isSplitParent).map((task) => <TaskRow key={task.id} task={task} onStart={(item) => begin(item)} onEdit={setEditing} />)}</ul></section>
 
       {tasks.some((task) => !task.active) ? <details className="completed-section"><summary>已完成 {tasks.filter((task) => !task.active).length} 件</summary><ul>{tasks.filter((task) => !task.active).map((task) => <CompletedTaskRow key={task.id} task={task} />)}</ul></details> : null}
 
       {showSettings ? <div className="dialog-backdrop" role="presentation"><section className="settings-dialog" role="dialog" aria-modal="true" aria-label="工作設定"><div className="section-heading"><h2>今天的節奏</h2><button className="icon-button" aria-label="關閉設定" onClick={() => setShowSettings(false)}>×</button></div><label>預計投入 <input type="number" min="0" step="15" value={settings.dailyWorkMinutes} onChange={(event) => void saveSettings({ ...settings, dailyWorkMinutes: Number(event.target.value) })} /> 分鐘</label><label>保留緩衝 <input type="range" min="0" max="0.5" step="0.05" value={settings.bufferRatio} onChange={(event) => void saveSettings({ ...settings, bufferRatio: Number(event.target.value) })} /><span>{Math.round(settings.bufferRatio * 100)}%</span></label><div className="backup-actions"><button className="secondary-button" onClick={downloadBackup}><Download size={16} /> 匯出備份</button><label className="secondary-button import-button">匯入備份<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void file.text().then(importBackup); }} /></label></div></section></div> : null}
+
+      {editing ? <TaskEditorDialog task={editing} onClose={() => setEditing(undefined)} /> : null}
 
       <BottomNav current="today" onNavigate={onNavigate} />
     </main>

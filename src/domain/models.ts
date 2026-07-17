@@ -23,6 +23,9 @@ export interface Task {
   estimateMinutes?: number;
   doneMinutes: number;
   repeatDays?: number[];
+  /** A split parent stays visible in the inbox but is excluded from planning totals. */
+  isSplitParent?: boolean;
+  parentTaskId?: string;
   active: boolean;
   completedAt?: string;
   createdAt: string;
@@ -31,7 +34,7 @@ export interface Task {
 
 export type WorkEventType =
   | "created" | "started" | "completed" | "skipped" | "timerTransition"
-  | "task_created" | "task_started" | "task_completed" | "task_skipped" | "task_reopened" | "task_updated"
+  | "task_created" | "task_started" | "task_completed" | "task_skipped" | "task_reopened" | "task_updated" | "task_split"
   | "timer_started" | "timer_paused" | "timer_resumed" | "timer_completed" | "timer_ended_early" | "timer_skipped"
   | "settings_updated" | "legacy_timer_transition";
 

@@ -12,4 +12,9 @@ describe("priority", () => {
   it("keeps importance independent from urgency", () => {
     expect(quadrantFor(task({ importance: 4, deadline: "2026-08-10" }), new Date("2026-07-16"))).toBe("important");
   });
+
+  it("puts low-importance work in a quadrant instead of dropping it", () => {
+    expect(quadrantFor(task({ importance: 1 }), new Date("2026-07-16"))).toBe("later");
+    expect(quadrantFor(task({ importance: 1, deadline: "2026-07-16" }), new Date("2026-07-16"))).toBe("urgent");
+  });
 });

@@ -29,7 +29,7 @@ export function taskPressure(task: Task, now = new Date()): { remainingMinutes: 
 
 export function workloadByQuadrant(tasks: Task[]): LoadSummary {
   const summary: LoadSummary = { importantUrgent: 0, important: 0, urgent: 0, later: 0, total: 0 };
-  for (const task of tasks.filter((item) => item.active)) {
+  for (const task of tasks.filter((item) => item.active && !item.isSplitParent)) {
     const minutes = remainingMinutes(task).minutes;
     summary[quadrantFor(task)] += minutes;
     summary.total += minutes;

@@ -24,6 +24,7 @@ interface AppState {
   addTask: (title: string) => Promise<void>;
   loadTrialTasks: () => Promise<void>;
   updateTask: (id: string, patch: Partial<Task>) => Promise<void>;
+  splitTask: (id: string, childTitles: string[]) => Promise<void>;
   completeTask: (id: string) => Promise<void>;
   restoreTask: (id: string) => Promise<void>;
   skipTask: (id: string) => Promise<void>;
@@ -89,12 +90,39 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({ tasks: state.tasks.map((task) => task.id === taskId ? { ...task, ...patch, updatedAt } : task) }));
     await recordEvent("task_updated", taskId);
   },
+  async splitTask(taskId, childTitles) {
+    const parent = get().tasks.find((task) => task.id === taskId);
+    const titles = childTitles.map((title) => title.trim()).filter(Boolean);
+    if (!parent || !parent.active || parent.isSplitParent || titles.length < 2) return;
+    const timestamp = now();
+    const remaining = Math.max(1, (parent.estimateMinutes ?? 25) - parent.doneMinutes);
+    const baseMinutes = Math.max(1, Math.floor(remaining / titles.length));
+    const children: Task[] = titles.map((title, index) => ({
+      id: id(), title, typeId: parent.typeId, importance: parent.importance, deadline: parent.deadline,
+      energy: parent.energy, estimateMinutes: index === titles.length - 1 ? remaining - baseMinutes * (titles.length - 1) : baseMinutes,
+      doneMinutes: 0, active: true, parentTaskId: parent.id, createdAt: timestamp, updatedAt: timestamp,
+    }));
+    await db.transaction("rw", db.tasks, db.events, async () => {
+      await db.tasks.update(parent.id, { isSplitParent: true, updatedAt: timestamp });
+      await db.tasks.bulkPut(children);
+    });
+    set((state) => ({ tasks: state.tasks.flatMap((task) => task.id === parent.id ? [{ ...task, isSplitParent: true, updatedAt: timestamp }, ...children] : [task]) }));
+    await recordEvent("task_split", parent.id);
+    await Promise.all(children.map((child) => recordEvent("task_created", child.id)));
+  },
   async completeTask(taskId) {
     const task = get().tasks.find((item) => item.id === taskId);
     if (!task?.active) return;
     if (get().activeSession?.taskId === taskId) await get().finishTimer("endedEarly");
     await get().updateTask(taskId, { active: false, completedAt: now() });
     await recordEvent("task_completed", taskId);
+    if (task.parentTaskId) {
+      const siblings = get().tasks.filter((item) => item.parentTaskId === task.parentTaskId);
+      if (siblings.length > 0 && siblings.every((item) => !item.active)) {
+        await get().updateTask(task.parentTaskId, { active: false, completedAt: now() });
+        await recordEvent("task_completed", task.parentTaskId, "inferred", { confidence: .9 });
+      }
+    }
   },
   async restoreTask(taskId) {
     const task = get().tasks.find((item) => item.id === taskId);
