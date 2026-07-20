@@ -3,6 +3,13 @@ import { Check, Scissors, X } from "lucide-react";
 import type { EnergyLevel, Importance, Task } from "../domain/models";
 import { useAppStore } from "../store/useAppStore";
 
+const toDateTimeLocal = (value?: string) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 16);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
+
 export function importanceLabel(importance?: Importance): string {
   return importance === 1 ? "低" : importance === 2 ? "一般" : importance === 3 ? "高" : importance === 4 ? "很高" : "未設定";
 }
@@ -14,6 +21,7 @@ export function TaskEditorDialog({ task, onClose }: { task: Task; onClose: () =>
     typeId: task.typeId ?? "",
     importance: task.importance ? String(task.importance) : "",
     deadline: task.deadline ?? "",
+    reminderAt: toDateTimeLocal(task.reminderAt),
     energy: task.energy ?? 2,
     estimateMinutes: task.estimateMinutes ?? 25,
   });
@@ -30,7 +38,7 @@ export function TaskEditorDialog({ task, onClose }: { task: Task; onClose: () =>
     await updateTask(task.id, {
       title: form.title.trim(), typeId: form.typeId || undefined,
       importance: form.importance ? Number(form.importance) as Importance : undefined,
-      deadline: form.deadline || undefined, energy: form.energy as EnergyLevel,
+      deadline: form.deadline || undefined, reminderAt: form.reminderAt || undefined, energy: form.energy as EnergyLevel,
       estimateMinutes: Math.max(1, form.estimateMinutes),
     });
     return true;
@@ -49,6 +57,7 @@ export function TaskEditorDialog({ task, onClose }: { task: Task; onClose: () =>
     <label>任務類型<select value={form.typeId} onChange={(event) => chooseProfile(event.target.value)}><option value="">不分類</option>{taskProfiles.filter((item) => item.active).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
     <div className="form-grid"><label>重要性設定<select aria-label="重要性設定" value={form.importance} onChange={(event) => setForm({ ...form, importance: event.target.value })}><option value="">未設定</option><option value="1">低</option><option value="2">一般</option><option value="3">高</option><option value="4">很高</option></select><small>未設定不會當作重要任務。</small></label><label>所需能量<select value={form.energy} onChange={(event) => setForm({ ...form, energy: Number(event.target.value) as EnergyLevel })}><option value="1">低</option><option value="2">中</option><option value="3">高</option></select></label></div>
     <div className="form-grid"><label>截止日期<input type="date" value={form.deadline} onChange={(event) => setForm({ ...form, deadline: event.target.value })} /></label><label>預估分鐘<input type="number" min="1" step="5" value={form.estimateMinutes} onChange={(event) => setForm({ ...form, estimateMinutes: Number(event.target.value) })} /></label></div>
+    <label>提醒時間（選填）<input type="datetime-local" value={form.reminderAt} onChange={(event) => setForm({ ...form, reminderAt: event.target.value })} /><small>需先在「今天」右上角設定開啟訊息提醒。</small></label>
     {task.isSplitParent ? <p className="form-note">此任務已切分為子任務，排程與四象限只會計算子任務。</p> : <>
       <button className="text-button split-trigger" onClick={() => setShowSplit((visible) => !visible)}><Scissors size={16} /> 切分任務</button>
       {showSplit ? <div className="split-panel"><label>子任務（每行一項）<textarea value={splitLines} onChange={(event) => { setSplitLines(event.target.value); setSplitError(""); }} placeholder={"例如：\n整理資料\n完成第一稿\n檢查並送出"} /></label><p>子任務會沿用重要性、期限、能量，並平分剩餘預估時間。</p>{splitError ? <p className="form-error" role="alert">{splitError}</p> : null}<button className="secondary-button full-button" onClick={() => void createSplit()}><Scissors size={16} /> 建立子任務</button></div> : null}

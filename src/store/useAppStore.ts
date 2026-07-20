@@ -4,8 +4,9 @@ import type { Task, TaskTypeProfile, TimerMode, TimerOutcome, TimerSession, Work
 import { format } from "date-fns";
 import { quadrantFor, urgencyFromDeadline } from "../domain/priority";
 import { timerActualSeconds, timerRemainingSeconds } from "../domain/timer";
+import { showNotification } from "../app/notifications";
 
-const defaultSettings: WorkSettings = { dailyWorkMinutes: 180, averageEnergy: 2, bufferRatio: 0.2 };
+const defaultSettings: WorkSettings = { dailyWorkMinutes: 180, averageEnergy: 2, bufferRatio: 0.2, notificationsEnabled: false };
 const id = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 const defaultProfiles: TaskTypeProfile[] = [
@@ -60,7 +61,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       db.sessions.filter((session) => !session.endedAt).first(),
     ]);
     const normalizedSession = activeSession ? { ...activeSession, status: activeSession.status ?? (activeSession.pausedRemainingSeconds !== undefined ? "paused" as const : "running" as const) } : undefined;
-    set({ tasks, taskProfiles, settings: storedSettings ?? defaultSettings, activeSession: normalizedSession, hydrated: true });
+    set({ tasks, taskProfiles, settings: { ...defaultSettings, ...storedSettings }, activeSession: normalizedSession, hydrated: true });
   },
   async addTask(title) {
     const trimmed = title.trim();
@@ -179,6 +180,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       const minutes = Math.round(actualSeconds / 60);
       const task = get().tasks.find((item) => item.id === session.taskId);
       if (task && minutes > 0) await get().updateTask(task.id, { doneMinutes: task.doneMinutes + minutes });
+    }
+    if (outcome === "completed" && get().settings.notificationsEnabled) {
+      const taskTitle = session.taskId ? get().tasks.find((item) => item.id === session.taskId)?.title : undefined;
+      showNotification(session.mode === "shortBreak" || session.mode === "longBreak" ? "休息時間結束" : "專注時間結束", taskTitle ?? "準備好時，回來決定下一步。");
     }
     const eventType = outcome === "completed" ? "timer_completed" : outcome === "skipped" ? "timer_skipped" : "timer_ended_early";
     await recordEvent(eventType, session.taskId, "timer", { sessionId: session.id, mode: session.mode, plannedSeconds: session.plannedSeconds, actualSeconds });

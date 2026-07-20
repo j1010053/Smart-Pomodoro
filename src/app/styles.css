@@ -35,4 +35,6 @@
 .split-panel label { display:grid; gap:4px; color:#55574f; font-size:.85rem; font-weight:700; }
 .split-panel p { margin:8px 0 12px; color:#667060; font-size:.76rem; line-height:1.45; }
 .split-panel .form-error { color:#9a3c24; font-weight:700; }
+.notification-setting { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:20px; padding:14px; border:1px solid #d6e1d0; border-radius:14px; background:#f3f8ef; }
+.notification-setting b,.notification-setting small { display:block; }.notification-setting small { margin-top:4px; color:#667060; font-size:.76rem; line-height:1.4; }
 @media (min-width:640px) { .task-row { grid-template-columns:28px minmax(0,1fr) 108px auto; }.importance-control { display:grid; gap:3px; color:#66685f; font-size:.67rem; }.task-row .importance-control select { display:block; width:100%; padding:4px 0; border:0; background:transparent; color:#42463e; font-size:.78rem; } }

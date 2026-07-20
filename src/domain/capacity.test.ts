@@ -3,10 +3,10 @@ import { effectiveDailyCapacity } from "./capacity";
 
 describe("effectiveDailyCapacity", () => {
   it("reserves the configured buffer", () => {
-    expect(effectiveDailyCapacity({ dailyWorkMinutes: 180, averageEnergy: 2, bufferRatio: 0.2 })).toBe(144);
+    expect(effectiveDailyCapacity({ dailyWorkMinutes: 180, averageEnergy: 2, bufferRatio: 0.2, notificationsEnabled: false })).toBe(144);
   });
 
   it("keeps invalid ratios within a safe range", () => {
-    expect(effectiveDailyCapacity({ dailyWorkMinutes: 180, averageEnergy: 2, bufferRatio: 2 })).toBe(0);
+    expect(effectiveDailyCapacity({ dailyWorkMinutes: 180, averageEnergy: 2, bufferRatio: 2, notificationsEnabled: false })).toBe(0);
   });
 });

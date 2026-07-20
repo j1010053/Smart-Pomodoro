@@ -6,12 +6,14 @@ import { FocusScreen } from "../screens/FocusScreen";
 import { ReviewScreen } from "../screens/ReviewScreen";
 import type { AppPage } from "./navigation";
 import { useAppStore } from "../store/useAppStore";
+import { useTaskReminders } from "./notifications";
 
 export function App() {
   const [page, setPage] = useState<AppPage>("today");
-  const { hydrated, hydrate, activeSession } = useAppStore();
+  const { hydrated, hydrate, activeSession, tasks, settings } = useAppStore();
   useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => { if (hydrated && activeSession) setPage("focus"); }, [hydrated, activeSession?.id]);
+  useTaskReminders(tasks, hydrated && settings.notificationsEnabled);
   if (!hydrated) return <main className="app-shell"><p className="loading">正在讀取你的本機資料…</p></main>;
   if (page === "focus") return <FocusScreen onNavigate={setPage} />;
   let screen: ReactNode = <TodayScreen onNavigate={setPage} />;

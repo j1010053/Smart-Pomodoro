@@ -18,4 +18,8 @@ describe("M2 workload pressure", () => {
     const load = workloadByQuadrant([task({ id: "parent", estimateMinutes: 60, isSplitParent: true }), task({ id: "child", estimateMinutes: 30, parentTaskId: "parent" })]);
     expect(load.total).toBe(30);
   });
+  it("uses the same remaining minutes after work has been recorded", () => {
+    const load = workloadByQuadrant([task({ importance: 4, estimateMinutes: 50, doneMinutes: 20 })]);
+    expect(load).toMatchObject({ important: 30, total: 30 });
+  });
 });

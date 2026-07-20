@@ -3,7 +3,7 @@ import { ArrowRight, Download, Play, Plus, Settings2, Sparkles, TimerReset } fro
 import { effectiveDailyCapacity } from "../domain/capacity";
 import type { Importance, Task } from "../domain/models";
 import { recommendTasks, urgencyFromDeadline } from "../domain/priority";
-import { workloadByQuadrant, taskPressure } from "../domain/workload";
+import { remainingMinutes, workloadByQuadrant, taskPressure } from "../domain/workload";
 import { buildSevenDayForecast, matrixHint } from "../domain/forecast";
 import { useAppStore } from "../store/useAppStore";
 import { BottomNav } from "../app/BottomNav";
@@ -16,12 +16,15 @@ function TaskRow({ task, onStart, onEdit }: { task: Task; onStart: (task: Task) 
   const updateTask = useAppStore((state) => state.updateTask);
   const completeTask = useAppStore((state) => state.completeTask);
   const urgency = urgencyFromDeadline(task.deadline);
+  const remaining = remainingMinutes(task).minutes;
+  const estimate = task.estimateMinutes ?? 25;
   return (
     <li className="task-row">
       <button className="check-button" aria-label={`完成 ${task.title}`} onClick={() => void completeTask(task.id)} />
       <button className="task-copy" onClick={() => onEdit(task)} aria-label={`編輯 ${task.title}`}>
         <strong>{task.title}</strong>
-        <span>{task.deadline ? `${task.deadline}${urgency >= 35 ? " · 時間接近" : ""}` : "尚未分類"} · {task.estimateMinutes ?? 25} 分鐘</span>
+        <span>{task.deadline ? `${task.deadline}${urgency >= 35 ? " · 時間接近" : ""}` : "無截止日"}</span>
+        <small>已投入 {task.doneMinutes} ／ 預估 {estimate} 分鐘 · 剩餘 {remaining} 分鐘</small>
         <small>重要性設定：{importanceLabel(task.importance)}</small>
       </button>
       <label className="importance-control"><span>重要性設定</span><select aria-label={`${task.title} 的重要性設定`} value={task.importance ?? ""} onChange={(event) => void updateTask(task.id, { importance: event.target.value ? Number(event.target.value) as Importance : undefined })}>
@@ -43,6 +46,7 @@ export function TodayScreen({ onNavigate }: { onNavigate: (page: AppPage) => voi
   const [showSettings, setShowSettings] = useState(false);
   const [recommendationIndex, setRecommendationIndex] = useState(0);
   const [skipNotice, setSkipNotice] = useState<string>();
+  const [notificationNotice, setNotificationNotice] = useState<string>();
   const [editing, setEditing] = useState<Task>();
   const capacity = effectiveDailyCapacity(settings);
   const recommendations = useMemo(() => recommendTasks(tasks), [tasks]);
@@ -61,6 +65,18 @@ export function TodayScreen({ onNavigate }: { onNavigate: (page: AppPage) => voi
     anchor.download = `smart-pomodoro-backup-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click(); URL.revokeObjectURL(anchor.href);
   });
+  const toggleNotifications = async () => {
+    if (!settings.notificationsEnabled) {
+      if (!("Notification" in window)) { setNotificationNotice("這個瀏覽器不支援訊息提醒。"); return; }
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") { setNotificationNotice("未取得通知權限；可在瀏覽器或手機的網站設定中重新允許。 "); return; }
+      await saveSettings({ ...settings, notificationsEnabled: true });
+      setNotificationNotice("已開啟：計時結束與指定的任務時間會提醒你。");
+      return;
+    }
+    await saveSettings({ ...settings, notificationsEnabled: false });
+    setNotificationNotice("已關閉本網站的訊息提醒。");
+  };
 
   return (
     <main className="app-shell">
@@ -90,16 +106,17 @@ export function TodayScreen({ onNavigate }: { onNavigate: (page: AppPage) => voi
         <p>今日建議 {todayPlan.scheduledMinutes} 分鐘<br />已保留 {Math.round(settings.dailyWorkMinutes * settings.bufferRatio)} 分鐘緩衝</p>
       </section>
       {todayPlan.overflowMinutes > 0 ? <p className="warning" role="status">今天到期的工作超出容量 {todayPlan.overflowMinutes} 分鐘。</p> : null}
+      {planHint ? <p className="matrix-hint" role="status">{planHint}</p> : null}
 
       <section className="forecast-card"><div className="section-heading"><div><p className="eyebrow">未來七天</p><h2>截止工作壓力</h2></div><span>{forecast.hasOverload ? "需要調整" : "可安排"}</span></div><div className="forecast-days">{forecast.days.map((day, index) => <div className={`forecast-day ${day.risk}`} key={day.date}><span>{index === 0 ? "今天" : `${new Date(`${day.date}T00:00:00`).getMonth() + 1}/${new Date(`${day.date}T00:00:00`).getDate()}`}</span><b>{day.scheduledMinutes + day.overflowMinutes}</b><small>分</small></div>)}</div><p>{forecast.hasOverload ? `最早風險日：${forecast.firstRiskDate}` : `彈性待辦 ${forecast.flexibleBacklogMinutes} 分鐘，不列入硬性期限壓力。`}</p></section>
 
-      <section className="matrix-card"><div className="section-heading"><div><p className="eyebrow">今日安排</p><h2>四象限配比</h2></div><span>{todayPlan.scheduledMinutes} 分</span></div><div className="matrix"><div className="quadrant urgent-important"><b>重要且緊急</b><span>{todayPlan.quadrantMinutes.importantUrgent} 分</span></div><div className="quadrant important"><b>重要、不緊急</b><span>{todayPlan.quadrantMinutes.important} 分</span></div><div className="quadrant urgent"><b>緊急、不重要</b><span>{todayPlan.quadrantMinutes.urgent} 分</span></div><div className="quadrant later"><b>之後再說</b><span>{todayPlan.quadrantMinutes.later} 分</span></div></div>{planHint ? <p className="matrix-hint">{planHint}</p> : null}<p className="backlog-note">全部未完成待辦共 {load.total} 分鐘。</p></section>
+      <section className="matrix-card"><div className="section-heading"><div><p className="eyebrow">所有待辦</p><h2>四象限剩餘時間</h2></div><span>{load.total} 分</span></div><div className="matrix"><div className="quadrant urgent-important"><b>重要且緊急</b><span>{load.importantUrgent} 分</span></div><div className="quadrant important"><b>重要、不緊急</b><span>{load.important} 分</span></div><div className="quadrant urgent"><b>緊急、不重要</b><span>{load.urgent} 分</span></div><div className="quadrant later"><b>之後再說</b><span>{load.later} 分</span></div></div><p className="backlog-note">與任務列相同，都是「預估時間－已投入時間」的剩餘分鐘。</p></section>
 
       <section className="task-section"><div className="section-heading"><div><p className="eyebrow">收件匣與待辦</p><h2>點任務即可編輯</h2></div><span>{tasks.filter((task) => task.active && !task.isSplitParent).length} 件</span></div><ul>{tasks.filter((task) => task.active && !task.isSplitParent).map((task) => <TaskRow key={task.id} task={task} onStart={(item) => begin(item)} onEdit={setEditing} />)}</ul></section>
 
       {tasks.some((task) => !task.active) ? <details className="completed-section"><summary>已完成 {tasks.filter((task) => !task.active).length} 件</summary><ul>{tasks.filter((task) => !task.active).map((task) => <CompletedTaskRow key={task.id} task={task} />)}</ul></details> : null}
 
-      {showSettings ? <div className="dialog-backdrop" role="presentation"><section className="settings-dialog" role="dialog" aria-modal="true" aria-label="工作設定"><div className="section-heading"><h2>今天的節奏</h2><button className="icon-button" aria-label="關閉設定" onClick={() => setShowSettings(false)}>×</button></div><label>預計投入 <input type="number" min="0" step="15" value={settings.dailyWorkMinutes} onChange={(event) => void saveSettings({ ...settings, dailyWorkMinutes: Number(event.target.value) })} /> 分鐘</label><label>保留緩衝 <input type="range" min="0" max="0.5" step="0.05" value={settings.bufferRatio} onChange={(event) => void saveSettings({ ...settings, bufferRatio: Number(event.target.value) })} /><span>{Math.round(settings.bufferRatio * 100)}%</span></label><div className="backup-actions"><button className="secondary-button" onClick={downloadBackup}><Download size={16} /> 匯出備份</button><label className="secondary-button import-button">匯入備份<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void file.text().then(importBackup); }} /></label></div></section></div> : null}
+      {showSettings ? <div className="dialog-backdrop" role="presentation"><section className="settings-dialog" role="dialog" aria-modal="true" aria-label="工作設定"><div className="section-heading"><h2>今天的節奏</h2><button className="icon-button" aria-label="關閉設定" onClick={() => setShowSettings(false)}>×</button></div><label>預計投入 <input type="number" min="0" step="15" value={settings.dailyWorkMinutes} onChange={(event) => void saveSettings({ ...settings, dailyWorkMinutes: Number(event.target.value) })} /> 分鐘</label><label>保留緩衝 <input type="range" min="0" max="0.5" step="0.05" value={settings.bufferRatio} onChange={(event) => void saveSettings({ ...settings, bufferRatio: Number(event.target.value) })} /><span>{Math.round(settings.bufferRatio * 100)}%</span></label><div className="notification-setting"><div><b>訊息提醒</b><small>計時結束與設定的任務提醒時間。</small></div><button className="secondary-button" onClick={() => void toggleNotifications()}>{settings.notificationsEnabled ? "關閉提醒" : "開啟提醒"}</button></div>{notificationNotice ? <p className="form-note" role="status">{notificationNotice}</p> : null}<div className="backup-actions"><button className="secondary-button" onClick={downloadBackup}><Download size={16} /> 匯出備份</button><label className="secondary-button import-button">匯入備份<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void file.text().then(importBackup); }} /></label></div></section></div> : null}
 
       {editing ? <TaskEditorDialog task={editing} onClose={() => setEditing(undefined)} /> : null}
 

@@ -19,6 +19,7 @@ export interface Task {
   typeId?: string;
   importance?: Importance;
   deadline?: string;
+  reminderAt?: string;
   energy?: EnergyLevel;
   estimateMinutes?: number;
   doneMinutes: number;
@@ -77,6 +78,7 @@ export interface WorkSettings {
   dailyWorkMinutes: number;
   averageEnergy: EnergyLevel;
   bufferRatio: number;
+  notificationsEnabled: boolean;
 }
 
 export type TimerMode = "focus" | "shortBreak" | "longBreak" | "microStart";
