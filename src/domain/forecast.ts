@@ -46,8 +46,10 @@ export function buildSevenDayForecast(tasks: Task[], dailyCapacity: number, now 
   hard.sort((a, b) => a.dueIndex - b.dueIndex || a.task.createdAt.localeCompare(b.task.createdAt));
   for (const item of hard) {
     let unplaced = item.minutes;
-    for (let index = item.dueIndex; index >= 0 && unplaced > 0; index -= 1) {
-      const planned = Math.min(unplaced, days[index].remainingCapacityMinutes);
+    for (let index = 0; index <= item.dueIndex && unplaced > 0; index += 1) {
+      const daysLeft = item.dueIndex - index + 1;
+      const evenShare = Math.ceil(unplaced / daysLeft);
+      const planned = Math.min(evenShare, days[index].remainingCapacityMinutes);
       days[index].scheduledMinutes += planned; days[index].deadlineMinutes += planned; days[index].remainingCapacityMinutes -= planned;
       days[index].quadrantMinutes[quadrantFor(item.task, addDays(today, index))] += planned; unplaced -= planned;
     }
@@ -72,7 +74,7 @@ export function buildSevenDayForecast(tasks: Task[], dailyCapacity: number, now 
 }
 
 export function matrixHint(day: ForecastDay): string | undefined {
-  if (day.risk === "overload") return "截止工作已超過可用容量，請先調整期限或範圍。";
+  if (day.risk === "overload") return "到這一天前的截止工作超過可用容量，請調整期限、範圍或投入時間。";
   if (day.scheduledMinutes <= 0) return undefined;
   const urgentShare = (day.quadrantMinutes.importantUrgent + day.quadrantMinutes.urgent) / day.scheduledMinutes;
   const q3Share = day.quadrantMinutes.urgent / day.scheduledMinutes;
